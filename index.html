@@ -81,6 +81,20 @@ tr[data-p]{cursor:pointer}
 .legend i{width:20px;height:4px;border-radius:2px;display:inline-block}
 .legend i.jam{background:repeating-linear-gradient(90deg,var(--jam) 0 6px,transparent 6px 9px)}
 .fine{font-size:12px;color:var(--muted)}
+.status{margin-left:auto;font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border-radius:999px;background:var(--chip);color:var(--ink);border:1px solid var(--line)}
+.status.div{background:var(--jam);color:#fff;border-color:var(--jam)}
+.demo{display:flex;flex-direction:column;gap:10px}
+.demo .row{display:flex;gap:6px}
+.demo button,.qv button{font:600 13px var(--f-body);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer}
+.demo button.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.slider{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.slider input{width:100%;accent-color:var(--accent)}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}
+.chk input{accent-color:var(--accent);width:16px;height:16px}
+.qv{display:flex;gap:6px;flex-wrap:wrap}
+.qv button{box-shadow:0 1px 4px rgb(0 0 0/.15);padding:6px 10px;font-size:12px}
+.hide-labs .lab:not(.key):not(.pk){display:none!important}
+.hide-park .leaflet-overlay-pane path.pkpoly,.hide-park .lab.pk{display:none!important}
 .fine ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 
 /* Leaflet core (inlined; external stylesheets are blocked) */
@@ -137,20 +151,32 @@ tr[data-p]{cursor:pointer}
 <header class="top">
   <h1>Kulasai Dussehra 2026 · Vehicle Routes &amp; Contingencies</h1>
   <span class="sub">Kulasekarapattinam, Thoothukudi District · Thoothukudi (TUT) and Tirunelveli (TIN) entry routes · Names as in the finalized KMZ</span>
+  <span class="status" id="status"></span>
 </header>
 
 <main class="app">
   <div id="map" role="region" aria-label="Route map"></div>
   <aside class="side">
     <section>
-      <h2>Entry route</h2>
+      <h2>1 · Entry route</h2>
       <div class="tabs" id="routeTabs"></div>
     </section>
     <section>
-      <h2>Situation</h2>
+      <h2>2 · Traffic condition</h2>
       <div class="scen" id="scenList"></div>
     </section>
     <section class="card" id="detail" aria-live="polite"></section>
+    <section>
+      <h2>3 · Demonstrate</h2>
+      <div class="demo">
+        <div class="row"><button id="play" class="primary">Pause movement</button><button id="restart">Restart</button></div>
+        <label class="slider" for="speed">Movement speed <input id="speed" type="range" min="0.2" max="3" step="0.1" value="1"></label>
+        <label class="chk" for="cmp"><input id="cmp" type="checkbox" checked> Show regular route for comparison</label>
+        <label class="chk" for="showPark"><input id="showPark" type="checkbox" checked> Parking boundaries and labels</label>
+        <label class="chk" for="showLab"><input id="showLab" type="checkbox" checked> Junction names</label>
+        <p class="fine" style="margin:0">Moving dots show the direction of inward movement only. They are not live vehicles, counts or travel times.</p>
+      </div>
+    </section>
     <section>
       <h2>Parking release (SDPO discretion)</h2>
       <div class="seg" id="parkModes"></div>
@@ -320,8 +346,8 @@ function pkColor(p){ return p.tw?css('--p-tw'):p.set==='tut'?css('--p-tut'):css(
 PK.forEach(p=>{
   const polys=D.polys.filter(q=>q.id===p.id), pt=P(p.kml), desc=pt&&pt.d?esc(pt.d):'';
   const pop=`<b>${esc(p.kml)}</b><br>${desc}<br><a href="${gmaps(pt.c)}" target="_blank" rel="noopener">Open in Google Maps</a>`;
-  const ls=polys.map(q=>L.polygon(q.c,{color:pkColor(p),weight:1.5,fillColor:pkColor(p),fillOpacity:.25}).bindPopup(pop).addTo(gPark));
-  const mk=L.circleMarker(pt.c,{radius:4,color:pkColor(p),fillColor:pkColor(p),fillOpacity:1,weight:1}).bindPopup(pop)
+  const ls=polys.map(q=>L.polygon(q.c,{color:pkColor(p),weight:1.5,fillColor:pkColor(p),fillOpacity:.25,className:'pkpoly'}).bindPopup(pop).addTo(gPark));
+  const mk=L.circleMarker(pt.c,{radius:4,color:pkColor(p),fillColor:pkColor(p),fillOpacity:1,weight:1,className:'pkpoly'}).bindPopup(pop)
     .bindTooltip(p.id,{permanent:true,direction:'top',offset:[0,-5],className:'lab pk t2'}).addTo(gPark);
   parkLayers[p.id]={polys:ls,mk};
 });
@@ -371,31 +397,92 @@ function setKey(names, jamNames){
   });
 }
 
-function draw(){
-  gActive.clearLayers();
+/* End-to-end inward path for the chosen situation: regular route up to the diversion point,
+   the contingency road(s), then the regular route again from the rejoin point. */
+function composePath(R,s){
+  const reg=D.lines[R.line].c;
+  if(!s) return reg;
+  const iDiv=nearestIdx(reg,P(s.divert).c);
+  let out=reg.slice(0,iDiv+1);
+  s.path.forEach(([k,a,b])=>out=out.concat(slice(k,a,b)));
+  if(!s.rejoin.startsWith('P_')) out=out.concat(reg.slice(nearestIdx(reg,P(s.rejoin).c)));
+  return out;
+}
+
+/* Moving vehicles along the active path */
+const anim={pts:[],cum:[],total:0,phase:0,playing:!matchMedia('(prefers-reduced-motion: reduce)').matches,dots:[],last:0};
+function setPath(c){
+  anim.pts=c; anim.cum=[0];
+  for(let i=1;i<c.length;i++) anim.cum.push(anim.cum[i-1]+Math.sqrt(d2(c[i],c[i-1])));
+  anim.total=anim.cum[anim.cum.length-1]; anim.phase=0;
+  const n=Math.max(14,Math.min(48,Math.round(anim.total*900)));
+  anim.dots.forEach(d=>gActive.removeLayer(d));
+  anim.dots=Array.from({length:n},()=>L.circleMarker(c[0],{radius:4,color:css('--casing'),weight:1.5,fillColor:css('--ink'),fillOpacity:1,interactive:false}).addTo(gActive));
+  placeDots();
+}
+function at(dist){
+  const c=anim.cum; let lo=0,hi=c.length-1;
+  while(lo<hi){const m=(lo+hi)>>1; if(c[m]<dist) lo=m+1; else hi=m;}
+  const i=Math.max(1,lo), f=(dist-c[i-1])/((c[i]-c[i-1])||1), a=anim.pts[i-1], b=anim.pts[i];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f];
+}
+function placeDots(){
+  const n=anim.dots.length; if(!n||!anim.total) return;
+  anim.dots.forEach((d,j)=>d.setLatLng(at(((anim.phase+j/n)%1)*anim.total)));
+}
+function tick(t){
+  const dt=Math.min(60,t-(anim.last||t)); anim.last=t;
+  if(anim.playing){ anim.phase=(anim.phase+dt*0.0000075*Number(document.getElementById('speed').value))%1; placeDots(); }
+  requestAnimationFrame(tick);
+}
+function syncPlay(){ document.getElementById('play').textContent=anim.playing?'Pause movement':'Play movement'; }
+document.getElementById('play').onclick=()=>{anim.playing=!anim.playing; syncPlay();};
+document.getElementById('restart').onclick=()=>{anim.phase=0; placeDots();};
+document.getElementById('cmp').onchange=()=>draw(false);
+document.getElementById('showPark').onchange=e=>map.getContainer().classList.toggle('hide-park',!e.target.checked);
+document.getElementById('showLab').onchange=e=>map.getContainer().classList.toggle('hide-labs',!e.target.checked);
+
+/* Quick views */
+const VIEWS={'Fit route':null,'Udankudi':[[8.4215,78.0150],[8.4385,78.0420]],'Parking zone':[[8.3985,78.0375],[8.4160,78.0520]],'Temple':[[8.3965,78.0480],[8.4080,78.0610]]};
+const QV=L.Control.extend({onAdd(){ const el=L.DomUtil.create('div','qv'); L.DomEvent.disableClickPropagation(el);
+  el.innerHTML=Object.keys(VIEWS).map((k,i)=>`<button id="qv${i}" data-v="${k}">${k}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ const v=VIEWS[b.dataset.v];
+    if(v) map.flyToBounds(v,{duration:.6}); else if(anim.pts.length) map.flyToBounds(L.latLngBounds(anim.pts).pad(0.12),{duration:.6}); });
+  return el; }});
+map.addControl(new QV({position:'bottomleft'}));
+
+function draw(fly=true){
+  gActive.clearLayers(); anim.dots=[];
   const R=ROUTES[route], s=scen&&SC[route].find(x=>x.code===scen);
   Object.entries(baseLines).forEach(([k,l])=>l.setStyle({opacity:k===R.line?0:(['tut','tin','rks'].includes(k)?.3:.4)}));
   const casing=css('--casing'), bounds=L.latLngBounds([]);
-  const add=(c,o,flow)=>{ L.polyline(c,{color:casing,weight:o.weight+4,opacity:.9,interactive:false}).addTo(gActive);
-    const l=L.polyline(c,Object.assign({interactive:false,className:flow?'flow':''},o)).addTo(gActive); c.forEach(x=>bounds.extend(x)); return l; };
+  const add=(c,o)=>{ L.polyline(c,{color:casing,weight:o.weight+4,opacity:.9,interactive:false}).addTo(gActive);
+    const l=L.polyline(c,Object.assign({interactive:false},o)).addTo(gActive); c.forEach(x=>bounds.extend(x)); return l; };
   const key=new Set([R.seq[0], R.seq[R.seq.length-1]]), jamN=new Set();
+  const path=composePath(R,s);
+  const st=document.getElementById('status');
+  st.textContent=s?`Diversion active · ${s.code}`:`Normal inward movement · ${R.label}`; st.classList.toggle('div',!!s);
   if(!s){
-    add(D.lines[R.line].c,{color:css('--r-reg'),weight:5});
+    add(path,{color:css('--r-reg'),weight:5});
     R.seq.forEach(n=>key.add(n));
   } else {
-    add(D.lines[R.line].c,{color:css('--r-reg'),weight:4,opacity:.55});
-    s.jam.forEach(([k,a,b])=>{ const c=slice(k,a,b);
+    if(document.getElementById('cmp').checked)
+      L.polyline(D.lines[R.line].c,{color:css('--muted'),weight:4,opacity:.55,interactive:false}).addTo(gActive);
+    L.polyline(path,{color:casing,weight:9,opacity:.9,interactive:false}).addTo(gActive);
+    L.polyline(path,{color:css('--r-reg'),weight:5,interactive:false}).addTo(gActive);
+    s.jam.forEach(([k,a,b])=>{ const c=slice(k,a,b); c.forEach(x=>bounds.extend(x));
       L.polyline(c,{color:css('--jam'),weight:14,opacity:.18,interactive:false}).addTo(gActive);
       L.polyline(c,{color:css('--jam'),weight:5,dashArray:'2 9',lineCap:'round',interactive:false}).addTo(gActive);
       jamN.add(a); jamN.add(b); });
-    s.path.forEach(([k,a,b])=>add(slice(k,a,b),{color:css(COL[k]),weight:6},true));
+    s.path.forEach(([k,a,b])=>add(slice(k,a,b),{color:css(COL[k]),weight:6}));
     key.add(s.divert); key.add(s.rejoin); s.via.forEach(v=>key.add(v[0]));
     s.jam.forEach(([,a,b])=>{key.add(a);key.add(b);});
     if(ptMarkers[s.divert]){ const c=P(s.divert).c;
       L.circleMarker(c,{radius:12,color:css('--ink'),weight:3,fill:false,interactive:false}).addTo(gActive); }
   }
   setKey(key,jamN);
-  if(bounds.isValid()) map.flyToBounds(bounds.pad(0.12),{duration:.6, maxZoom:16});
+  setPath(path);
+  if(fly && bounds.isValid()) map.flyToBounds(bounds.pad(0.15),{duration:.6, maxZoom:16});
   renderDetail(R,s); renderTabs(); renderScen();
 }
 
@@ -477,7 +564,7 @@ document.getElementById('namesNote').innerHTML=`<h2>Name check against the KMZ</
  </ul>`;
 
 map.fitBounds(L.latLngBounds(D.lines.tut.c).extend(L.latLngBounds(D.lines.tin.c)).pad(0.05));
-zoomClasses(); setBase('streets'); renderPark(false); draw();
+zoomClasses(); setBase('streets'); renderPark(false); draw(); syncPlay(); requestAnimationFrame(tick);
 </script>
 
 </body></html>
