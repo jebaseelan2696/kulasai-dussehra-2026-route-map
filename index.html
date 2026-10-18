@@ -71,9 +71,9 @@ const PK=[
 ['P_14','opp','Samathuvapuram Road South Side','—',600],['P_15','opp','Royal Housing Sam Nagar Ground Plate','Right',2000],
 ['P_22','tw','Priya Gas godown Opp (Tharuvaikulam Karai Area)','—',2000]];
 const PKCOL={tut:'#456edb',opp:'#78a52e',tw:'#e0c400'};
-// Which parking groups each approach uses. The KMZ names the pre-assigned
-// TUT set "TIN-TUT (2)" and the rest "TIN-TUT"; adjust here if the TIN and
-// Ramakrishna School Jn. assignments differ.
+// Which parking groups each approach uses. TUT has the pre-assigned
+// "TIN-TUT (2)" set plus the rest; TIN and the Ramakrishna School Jn. route
+// use the "TIN-TUT" places and P_22. Confirmed against the bandobust plan.
 const PKFOR={tut:['tut','opp','tw'],tin:['opp','tw'],rama:['opp','tw']};
 const PKLBL={tut:'TIN-TUT (2) places, TUT pre-assigned',opp:'TIN-TUT places, four-wheelers',tw:'P_22, two-wheelers'};
 const pkGroups=()=>PKFOR[origin]||['tut','opp','tw'];
