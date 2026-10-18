@@ -234,11 +234,26 @@ const IMP_NAMES=new Set(IMP_KMZ.map(([n])=>n));
 const STARTS=[['Muthiahpuram Checkpost','tut'],['Seidunganallur (TIN)','tin'],['Ramakrishna School Jn., Udankudi','rama']]
 .filter(([n])=>points[n]);
 const START_NAMES=new Set(STARTS.map(([n])=>n));
-let labelCol={},parkFrac=[];
-function computeParkFrac(){parkFrac=[];if(active.length<2)return;
-let cum=[0];for(let i=1;i<active.length;i++)cum.push(cum[i-1]+Math.hypot(active[i][0]-active[i-1][0],active[i][1]-active[i-1][1]));
+let labelCol={},parkFrac=[],parkFed=[];
+// A parking road is only driven if the chosen approach actually feeds it, either
+// directly or through another parking road that it branches from. Without this
+// the roads animated on every approach, implying traffic from a route that
+// never reaches them.
+function computeParkFrac(){parkFrac=[];parkFed=PARKLINES.map(()=>false);
+if(origin==='exit')return;
+// the overview has no single active line, so every route it shows can feed
+const roots=active.length>1?[active]:allRoutes.map(r=>r.c).filter(c=>c.length>1);
+if(!roots.length)return;
+const R=130/111000,near=(p,path)=>{const q=path[nearest(path,p)];return Math.hypot(q[0]-p[0],q[1]-p[1])<R};
+for(let pass=0,changed=true;changed&&pass<PARKLINES.length;pass++){changed=false;
+PARKLINES.forEach((l,k)=>{if(parkFed[k])return;
+let ok=roots.some(rt=>near(l[0],rt));
+if(!ok)for(let m=0;m<PARKLINES.length;m++)if(parkFed[m]&&near(l[0],PARKLINES[m])){ok=true;break}
+if(ok){parkFed[k]=true;changed=true}})}
+const ref=active.length>1?active:roots[roots.length-1];
+let cum=[0];for(let i=1;i<ref.length;i++)cum.push(cum[i-1]+Math.hypot(ref[i][0]-ref[i-1][0],ref[i][1]-ref[i-1][1]));
 const tot=cum.at(-1)||1;
-for(const l of PARKLINES)parkFrac.push(cum[nearest(active,l[0])]/tot)}
+for(const l of PARKLINES)parkFrac.push(cum[nearest(ref,l[0])]/tot)}
 function computeLabelCols(){labelCol={};const cand=[];
 if(active.length>1)cand.push([active,activeCol]);
 for(const g of feeders)cand.push([g.c,activeCol]);
@@ -272,7 +287,7 @@ if($('parking').checked&&!templeMode){let rel=origin==='tut'?RELEASE[release].id
 for(let a of templeArea){ctx.beginPath();a.coords[0].forEach((p,i)=>{let q=screen(p);i?ctx.lineTo(...q):ctx.moveTo(...q)});ctx.closePath();ctx.strokeStyle='#880e4f';ctx.lineWidth=1.5;ctx.stroke()}
 if(!templeMode)for(let l of templeLines)stroke(l.coords[0],l.name.startsWith('Devotees')?'#9fa8da':'#ffd600',4);
 if(!templeMode&&['tut','tin','rama','all'].includes(origin))for(let[k,c]of Object.entries(routes))stroke(c,CCOL[k]+'80',3,[7,6]);
-if($('compare').checked&&bases[origin])stroke(bases[origin],'#92a1ad',5);for(const r of allRoutes)stroke(r.c,'#fff',10);for(const r of allRoutes)stroke(r.c,r.col,6);for(const r of allRoutes)dotsAlong(r.c,r.col,0,{car:true});for(const g of feeders)stroke(g.c,'#fff',9);for(const g of feeders)stroke(g.c,activeCol+'cc',5);stroke(active,'#fff',10);stroke(active,activeCol,6);if($('parking').checked&&!templeMode){for(const l of PARKLINES)stroke(l,'#fff',6.5);for(const l of PARKLINES)stroke(l,'#1574cc',3.5)}for(let d of divSegs){stroke(d.c,'#fff',11);stroke(d.c,d.col,7)}blockedStroke(blocked);dotsAlong(active,'#0d466f',0,{car:true});for(const g of feeders)dotsAlong(g.c,'#0d466f',0,{car:true,scale:.82});if($('parking').checked&&!templeMode){const al=screenLen(active);PARKLINES.forEach((l,k)=>dotsAlong(l,'#0d466f',(parkFrac[k]||0)*al*IN_SLOW,{gap:30,rad:3,off:flowOffsetIn,car:true,scale:.68}))}hits=[];let boxes=[];
+if($('compare').checked&&bases[origin])stroke(bases[origin],'#92a1ad',5);for(const r of allRoutes)stroke(r.c,'#fff',10);for(const r of allRoutes)stroke(r.c,r.col,6);for(const r of allRoutes)dotsAlong(r.c,r.col,0,{car:true});for(const g of feeders)stroke(g.c,'#fff',9);for(const g of feeders)stroke(g.c,activeCol+'cc',5);stroke(active,'#fff',10);stroke(active,activeCol,6);if($('parking').checked&&!templeMode){PARKLINES.forEach((l,k)=>{if(parkFed[k])stroke(l,'#fff',6.5)});PARKLINES.forEach((l,k)=>{if(parkFed[k])stroke(l,'#1574cc',3.5)})}for(let d of divSegs){stroke(d.c,'#fff',11);stroke(d.c,d.col,7)}blockedStroke(blocked);dotsAlong(active,'#0d466f',0,{car:true});for(const g of feeders)dotsAlong(g.c,'#0d466f',0,{car:true,scale:.82});if($('parking').checked&&!templeMode){const al=screenLen(active.length>1?active:(allRoutes.map(r=>r.c).filter(c=>c.length>1).at(-1)||active));PARKLINES.forEach((l,k)=>{if(parkFed[k])dotsAlong(l,'#0d466f',(parkFrac[k]||0)*al*IN_SLOW,{gap:30,rad:3,off:flowOffsetIn,car:true,scale:.68})})}hits=[];let boxes=[];
 for(let [n,p] of cpList){let q=screen(p);if(q[0]<-40||q[0]>width+40||q[1]<-40||q[1]>height+40)continue;ctx.save();ctx.translate(q[0],q[1]);ctx.rotate(Math.PI/4);ctx.fillStyle=CPCOL;ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.fillRect(-5,-5,10,10);ctx.strokeRect(-5,-5,10,10);ctx.restore();hits.push({n,p,q});if(!$('labels').checked)continue;let label=n.replace(/ Border CP$/,'');ctx.font='600 12px system-ui';let w=ctx.measureText(label).width+8,box=[q[0]+9,q[1]-20,w,18];if(boxes.some(b=>box[0]<b[0]+b[2]&&box[0]+w>b[0]&&box[1]<b[1]+b[3]&&box[1]+18>b[1]))continue;boxes.push(box);ctx.fillStyle='#fffffff0';ctx.fillRect(...box);ctx.fillStyle=CPCOL;ctx.fillText(label,box[0]+4,box[1]+13)}
 
 if(templeMode){for(let f of flowShow)stroke(f.path,'#ffffffe6',11);for(let f of flowShow)stroke(f.path,fcol(f),5,fdash(f));for(let f of flowShow)chevrons(f.path,fcol(f));for(let f of flowShow)dotsAlong(f.path,fcol(f),0);pressureMarks()}
