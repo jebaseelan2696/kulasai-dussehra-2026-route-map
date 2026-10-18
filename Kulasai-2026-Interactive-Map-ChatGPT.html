@@ -131,7 +131,7 @@ t_both:{label:'Both streams',only:null,text:'Dussehra Set (purple) and devotee (
 t_dset:{label:'Dussehra Set stream only',only:'dset',text:'In: Sastha Temple Jn. → Thayammal School Jn. → Mutharamman Temple Bus Stand Jn. → Temple Front Side. Out: either Tonsuring Place → Tonsure Exit Jn. → Padasalai Jn., or Guru Lodge Jn. → Padasalai Jn.; both continue to Theechatti Place.'},
 t_dev:{label:'Devotee stream only',only:'dev',text:'In: Rathnakaliamman Temple Jn. → Thiruvarul School Jn. → Vinayagar Temple Jn. → GH Jn. → Devotees Entry Point Jn. Out: doubling back past Arch Jn. → Kulasai PS Jn. → Kulasai Bypass Road Jn.'}};
 let dirty=true;const inv=()=>{dirty=true};
-let templeMode=false,flowShow=[],allRoutes=[];let divSegs=[],active=[],diversion=[],blocked=[],origin='tut',mode='normal',playing=true,flowOffset=0,zoom=11,cx=0,cy=0,width=1,height=1,hits=[],tileCache=new Map(),baseLoaded=false;
+let templeMode=false,flowShow=[],allRoutes=[];let divSegs=[],active=[],diversion=[],blocked=[],origin='tut',mode='normal',playing=true,flowOffset=0,flowOffsetIn=0,zoom=11,cx=0,cy=0,width=1,height=1,hits=[],tileCache=new Map(),baseLoaded=false;
 function merc(p){let lat=Math.max(-85,Math.min(85,p[1]))*Math.PI/180;return[(p[0]+180)/360,(1-Math.log(Math.tan(lat)+1/Math.cos(lat))/Math.PI)/2]}
 function screen(p){let a=merc(p),s=256*2**zoom;return[(a[0]-cx)*s+width/2,(a[1]-cy)*s+height/2]}
 function fit(a){if(!a.length)return;let ms=a.map(merc),xs=ms.map(p=>p[0]),ys=ms.map(p=>p[1]),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);cx=(minx+maxx)/2;cy=(miny+maxy)/2;zoom=Math.min(17,Math.log2(Math.min((width-140)/(maxx-minx||.001),(height-140)/(maxy-miny||.001))/256));inv();}
@@ -168,16 +168,17 @@ stroke(a,'#ffffffb0',w+6);stroke(a,'#d13c4b',w,[12,9]);ctx.restore()}
 // of pixels per second, so every line runs at one rhythm whatever its length.
 // baseDist offsets a branch by its distance along the parent, so a bubble
 // reaching a junction carries straight on into the branch.
-const DOT_GAP=46,DOT_SPEED=.055;
-function dotsAlong(path,col,baseDist){if(path.length<2)return;
+const DOT_GAP=46,DOT_SPEED=.055,IN_SLOW=.55;
+function dotsAlong(path,col,baseDist,gap,rad,off){if(path.length<2)return;
+gap=gap||DOT_GAP;rad=rad||4.5;off=off==null?flowOffset:off;
 const p=path.map(screen),L=[0];
 for(let i=1;i<p.length;i++)L.push(L[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]));
 const total=L.at(-1);if(!total)return;
-let s=((flowOffset-(baseDist||0))%DOT_GAP+DOT_GAP)%DOT_GAP;
-for(;s<=total;s+=DOT_GAP){let i=1;while(i<L.length-1&&L[i]<s)i++;
+let s=((off-(baseDist||0))%gap+gap)%gap;
+for(;s<=total;s+=gap){let i=1;while(i<L.length-1&&L[i]<s)i++;
 const u=(s-L[i-1])/(L[i]-L[i-1]||1),a=p[i-1],b=p[i];
-ctx.beginPath();ctx.arc(a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u,4.5,0,Math.PI*2);
-ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=1.8;ctx.stroke()}}
+ctx.beginPath();ctx.arc(a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u,rad,0,Math.PI*2);
+ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=rad>3.6?1.8:1.4;ctx.stroke()}}
 // Screen length of the active route up to each parking road's branch point.
 function screenLen(path){let t=0,p=path.map(screen);
 for(let i=1;i<p.length;i++)t+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return t}
@@ -238,19 +239,19 @@ ctx.fillStyle='#fff';ctx.fillText(label,bx+8,by+15.5);
 hits.push({n:label,p,q})}
 function startPins(boxes){for(const [n] of STARTS)pin(n,points[n],labelCol[n]||'#17334b',boxes)}
 function impPoints(boxes){for(const [label,p] of impList)pin(label,p,IMPCOL,boxes)}
-function draw(t){let dt=Math.min(60,t-last||0);last=t;if(!playing&&!dirty&&blocked.length<2){requestAnimationFrame(draw);return}dirty=false;if(playing)flowOffset=(flowOffset+dt*DOT_SPEED*Number($('speed').value))%1e6;ctx.clearRect(0,0,width,height);ctx.fillStyle='#edf3f7';ctx.fillRect(0,0,width,height);if($('basemap').value!=='off')tiles();
+function draw(t){let dt=Math.min(60,t-last||0);last=t;if(!playing&&!dirty&&blocked.length<2){requestAnimationFrame(draw);return}dirty=false;if(playing){let adv=dt*DOT_SPEED*Number($('speed').value);flowOffset=(flowOffset+adv)%1e6;flowOffsetIn=(flowOffsetIn+adv*IN_SLOW)%1e6}ctx.clearRect(0,0,width,height);ctx.fillStyle='#edf3f7';ctx.fillRect(0,0,width,height);if($('basemap').value!=='off')tiles();
 if($('parking').checked&&!templeMode){let rel=origin==='tut'?RELEASE[release].ids:[];let gs=pkGroups();for(let p of DATA.filter(p=>p.type==='polygon'&&p.name.startsWith('P_'))){let id=pid(p.name),grp=id==='P_22'?'tw':p.name.includes('(2)')?'tut':'opp';if(!gs.includes(grp))continue;let on=!rel.length||rel.includes(id),base=PKCOL[grp];ctx.beginPath();p.coords[0].forEach((a,i)=>{let q=screen(a);i?ctx.lineTo(...q):ctx.moveTo(...q)});ctx.closePath();ctx.fillStyle=base+(on?(rel.length?'99':'88'):'66');ctx.fill();ctx.strokeStyle=on&&rel.length?'#17334b':base;ctx.lineWidth=on&&rel.length?2.5:1.6;ctx.stroke()}}
 for(let a of templeArea){ctx.beginPath();a.coords[0].forEach((p,i)=>{let q=screen(p);i?ctx.lineTo(...q):ctx.moveTo(...q)});ctx.closePath();ctx.strokeStyle='#880e4f';ctx.lineWidth=1.5;ctx.stroke()}
 if(!templeMode)for(let l of templeLines)stroke(l.coords[0],l.name.startsWith('Devotees')?'#9fa8da':'#ffd600',4);
 if(!templeMode)for(let[k,c]of Object.entries(routes))stroke(c,CCOL[k]+'80',3,[7,6]);
-if($('compare').checked&&bases[origin])stroke(bases[origin],'#92a1ad',5);for(const r of allRoutes)stroke(r.c,'#fff',10);for(const r of allRoutes)stroke(r.c,r.col,6);for(const r of allRoutes)dotsAlong(r.c,r.col,0);stroke(active,'#fff',10);stroke(active,'#1574cc',6);if($('parking').checked&&!templeMode){for(const l of PARKLINES)stroke(l,'#fff',10);for(const l of PARKLINES)stroke(l,'#1574cc',6)}for(let d of divSegs){stroke(d.c,'#fff',11);stroke(d.c,d.col,7)}blockedStroke(blocked);dotsAlong(active,'#0d466f',0);if($('parking').checked&&!templeMode){const al=screenLen(active);PARKLINES.forEach((l,k)=>dotsAlong(l,'#0d466f',(parkFrac[k]||0)*al))}hits=[];let boxes=[];
+if($('compare').checked&&bases[origin])stroke(bases[origin],'#92a1ad',5);for(const r of allRoutes)stroke(r.c,'#fff',10);for(const r of allRoutes)stroke(r.c,r.col,6);for(const r of allRoutes)dotsAlong(r.c,r.col,0);stroke(active,'#fff',10);stroke(active,'#1574cc',6);if($('parking').checked&&!templeMode){for(const l of PARKLINES)stroke(l,'#fff',6.5);for(const l of PARKLINES)stroke(l,'#1574cc',3.5)}for(let d of divSegs){stroke(d.c,'#fff',11);stroke(d.c,d.col,7)}blockedStroke(blocked);dotsAlong(active,'#0d466f',0);if($('parking').checked&&!templeMode){const al=screenLen(active);PARKLINES.forEach((l,k)=>dotsAlong(l,'#0d466f',(parkFrac[k]||0)*al*IN_SLOW,30,3,flowOffsetIn))}hits=[];let boxes=[];
 if(templeMode){for(let f of flowShow)stroke(f.path,'#ffffffe6',11);for(let f of flowShow)stroke(f.path,fcol(f),5,fdash(f));for(let f of flowShow)chevrons(f.path,fcol(f));for(let f of flowShow)dotsAlong(f.path,fcol(f),0);pressureMarks()}
 startPins(boxes);if(showImp)impPoints(boxes);
 for(let [n,p] of pointList){let park=n.startsWith('P_');if(park&&(!$('parking').checked||templeMode))continue;if(templeMode&&/TIN-TUT/.test(n))continue;if(showImp&&IMP_NAMES.has(n))continue;if(START_NAMES.has(n))continue;let q=screen(p);if(q[0]<0||q[0]>width||q[1]<0||q[1]>height)continue;let important=active.some(a=>Math.hypot(a[0]-p[0],a[1]-p[1])<.00025);if(!park&&!important&&zoom<14)continue;ctx.beginPath();ctx.arc(q[0],q[1],park?5:3.5,0,Math.PI*2);ctx.fillStyle=park?'#657b32':'#17334b';ctx.fill();hits.push({n,p,q});if(!$('labels').checked)continue;let rl=RELEASE[release],hl=park&&rl.ids.includes(pid(n));if(park&&zoom<14&&!hl)continue;let label=park?(hl&&rl.ordered?(rl.ids.indexOf(pid(n))+1)+' · ':'')+pid(n):n;ctx.font='600 12px system-ui';let w=ctx.measureText(label).width+8;let box=[q[0]+7,q[1]-20,w,18];if(boxes.some(b=>box[0]<b[0]+b[2]&&box[0]+w>b[0]&&box[1]<b[1]+b[3]&&box[1]+18>b[1]))continue;boxes.push(box);let lc=park?PKCOL[pid(n)==='P_22'?'tw':n.includes('(2)')?'tut':'opp']:(labelCol[n]||'#17334b');ctx.beginPath();ctx.roundRect(box[0],box[1],box[2],box[3],4);ctx.fillStyle=lc;ctx.fill();ctx.strokeStyle='#ffffffcc';ctx.lineWidth=1.2;ctx.stroke();ctx.fillStyle='#fff';ctx.fillText(label,box[0]+4,box[1]+13)}
 stroke(BORDER,'#ffffffcc',5);stroke(BORDER,'#5c3d8f',2.5,[9,6]);
 for(let [n,p] of cpList){let q=screen(p);if(q[0]<-40||q[0]>width+40||q[1]<-40||q[1]>height+40)continue;ctx.save();ctx.translate(q[0],q[1]);ctx.rotate(Math.PI/4);ctx.fillStyle=CPCOL;ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.fillRect(-5,-5,10,10);ctx.strokeRect(-5,-5,10,10);ctx.restore();hits.push({n,p,q});if(!$('labels').checked)continue;let label=n.replace(/ Border CP$/,'');ctx.font='600 12px system-ui';let w=ctx.measureText(label).width+8,box=[q[0]+9,q[1]-20,w,18];if(boxes.some(b=>box[0]<b[0]+b[2]&&box[0]+w>b[0]&&box[1]<b[1]+b[3]&&box[1]+18>b[1]))continue;boxes.push(box);ctx.fillStyle='#fffffff0';ctx.fillRect(...box);ctx.fillStyle=CPCOL;ctx.fillText(label,box[0]+4,box[1]+13)}
 if($('basemap').value!=='off'&&!baseLoaded){ctx.fillStyle='#ffffffee';ctx.fillRect(12,70,310,30);ctx.fillStyle='#52687b';ctx.font='12px system-ui';ctx.fillText('Loading '+($('basemap').value==='sat'?'satellite imagery':'road tiles')+'… Routes work without it.',22,90)}requestAnimationFrame(draw)}
-$('release').onchange=selectRelease;$('releaseNote').innerHTML=RELEASE[release].note;$('origin').onchange=selectOrigin;$('scenario').onchange=update;$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause animation':'Play animation'};$('restart').onclick=()=>flowOffset=0;$('fit').onclick=()=>fit(active);
+$('release').onchange=selectRelease;$('releaseNote').innerHTML=RELEASE[release].note;$('origin').onchange=selectOrigin;$('scenario').onchange=update;$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause animation':'Play animation'};$('restart').onclick=()=>{flowOffset=0;flowOffsetIn=0};$('fit').onclick=()=>fit(active);
 $('local').onclick=()=>fit([[78.014,8.412],[78.043,8.439]]);$('parkview').onclick=()=>fit([[78.028,8.398],[78.056,8.417]]);
 let showImp=false;
 $('impview').onclick=()=>{showImp=!showImp;$('impview').classList.toggle('on',showImp);if(showImp)fit(impList.map(x=>x[1]));inv()};
