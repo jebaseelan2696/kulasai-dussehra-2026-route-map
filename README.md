@@ -6,5 +6,6 @@ Interactive briefing map for the Thoothukudi (TUT) and Tirunelveli (TIN) vehicle
 - `Kulasai-2026-Interactive-Map-ChatGPT.html` – working file for the main map
 - `Finalized-TIN & TUT Route.kmz` – source KMZ (route lines, junctions, parkings)
 - `seidunganallur-route.kml` – the TIN approach road, supplied separately from the KMZ
+- `important-points.kml` – briefing points not present in the KMZ
 - `Kulasai_Dussehra_Route_Contingency_Map.html` – earlier Claude version (reference only)
 - `TIN_TUT_Route_Roadmap.html` – earlier roadmap version
