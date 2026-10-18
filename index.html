@@ -144,7 +144,7 @@ const isParkPoly=n=>n.startsWith('P_')||ECRX.test(n);
 // "TIN-TUT (2)" set plus the rest; TIN and the Ramakrishna School Jn. route
 // use the "TIN-TUT" places and P_22. Confirmed against the bandobust plan.
 const ALLG=['tut','opp','tw','ecr','ecrtw'];
-const PKFOR={tut:['tut','opp','tw'],tin:['opp','tw'],rama:['tut','opp','tw'],ecr:['ecr','ecrtw'],rdp:['ecr'],exits:ALLG,all:ALLG};
+const PKFOR={tut:['tut','opp','tw'],tin:['tut','opp','tw'],rama:['tut','opp','tw'],ecr:['ecr','ecrtw'],rdp:['ecr'],exits:ALLG,all:ALLG};
 // Ramasamy Dharmapuram runs straight to P_16, so only that one is shown.
 const PKONLY={rdp:['P_16']};
 const PKLBL={tut:'TIN-TUT (2) places, TUT pre-assigned',opp:'TIN-TUT places, four-wheelers',tw:'P_22, two-wheelers',ecr:'ECR places, four-wheelers',ecrtw:'P_21, two-wheelers'};
