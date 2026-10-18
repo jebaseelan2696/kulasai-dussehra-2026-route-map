@@ -60,10 +60,13 @@ const nearest=(a,p)=>a.reduce((best,q,i)=>Math.hypot(q[0]-p[0],q[1]-p[1])<Math.h
 const PJ_T=nearest(bases.tut,points['Paramankurichi Jn.']),PJ_I=nearest(bases.tin,points['Paramankurichi Jn.']);
 // ECR: the Uvari and Thisaiyanvilai roads meet at Periyathalai Jn. and share one road on.
 const PJ_E=nearest(ECR_MAIN,points['Periyathalai Jn.']);
-const ECR_UVARI=ECR_MAIN.slice(0,PJ_E+1),ECR_COMMON=ECR_MAIN.slice(PJ_E);
+// The supplied line runs a little past Thiyagarajapuram Jn.; vehicles stop there.
+const TJ_E=nearest(ECR_MAIN,points['Thiyagarajapuram Jn.']);
+const ECR_UVARI=ECR_MAIN.slice(0,PJ_E+1),ECR_COMMON=ECR_MAIN.slice(PJ_E,TJ_E+1);
+bases.ecr=ECR_MAIN.slice(0,TJ_E+1);
 const ECRSEG=[{c:ECR_FEED,col:'#2e7d32',name:'ECR — Thisaiyanvilai to Periyathalai Jn.'},
 {c:ECR_UVARI,col:'#8e24aa',name:'ECR — Uvari to Periyathalai Jn.'},
-{c:ECR_COMMON,col:'#1574cc',name:'ECR common — Periyathalai Jn. to the parking zone'}];
+{c:ECR_COMMON,col:'#1574cc',name:'ECR common — Periyathalai Jn. to Thiyagarajapuram Jn.'}];
 // Approaches drawn as several coloured legs rather than one line.
 const MULTI={ecr:ECRSEG};
 // Exit 1 reaches Ranimaharajapuram Jn.; from there vehicles carry on outward along
