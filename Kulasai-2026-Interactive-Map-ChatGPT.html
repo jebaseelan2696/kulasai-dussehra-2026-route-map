@@ -169,16 +169,28 @@ stroke(a,'#ffffffb0',w+6);stroke(a,'#d13c4b',w,[12,9]);ctx.restore()}
 // baseDist offsets a branch by its distance along the parent, so a bubble
 // reaching a junction carries straight on into the branch.
 const DOT_GAP=46,DOT_SPEED=.055,IN_SLOW=.55;
-function dotsAlong(path,col,baseDist,gap,rad,off){if(path.length<2)return;
-gap=gap||DOT_GAP;rad=rad||4.5;off=off==null?flowOffset:off;
+// A vehicle, drawn nose-first along +x so a rotation of the segment angle
+// points it the way it is travelling.
+const CARPAL=['#e53935','#fdd835','#ffffff','#1e88e5','#43a047','#fb8c00','#00acc1','#8d6e63'];
+function drawCar(x,y,ang,col,sc){ctx.save();ctx.translate(x,y);ctx.rotate(ang);if(sc)ctx.scale(sc,sc);
+ctx.beginPath();ctx.roundRect(-7.5,-4,15,8,2.5);ctx.fillStyle=col;ctx.fill();
+ctx.strokeStyle='#17334b';ctx.lineWidth=1.3;ctx.stroke();
+ctx.beginPath();ctx.roundRect(.5,-2.5,4.5,5,1.3);
+ctx.globalAlpha=.55;ctx.fillStyle='#17334b';ctx.fill();ctx.globalAlpha=1;ctx.restore()}
+function dotsAlong(path,col,baseDist,o){if(path.length<2)return;o=o||{};
+const gap=o.gap||DOT_GAP,rad=o.rad||4.5,off=o.off==null?flowOffset:o.off,base=baseDist||0;
 const p=path.map(screen),L=[0];
 for(let i=1;i<p.length;i++)L.push(L[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]));
 const total=L.at(-1);if(!total)return;
-let s=((off-(baseDist||0))%gap+gap)%gap;
+let s=((off-base)%gap+gap)%gap;
 for(;s<=total;s+=gap){let i=1;while(i<L.length-1&&L[i]<s)i++;
-const u=(s-L[i-1])/(L[i]-L[i-1]||1),a=p[i-1],b=p[i];
-ctx.beginPath();ctx.arc(a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u,rad,0,Math.PI*2);
-ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=rad>3.6?1.8:1.4;ctx.stroke()}}
+const u=(s-L[i-1])/(L[i]-L[i-1]||1),a=p[i-1],b=p[i],
+x=a[0]+(b[0]-a[0])*u,y=a[1]+(b[1]-a[1])*u;
+if(o.car){// (off - s) is constant for a given vehicle, so its colour does not flicker
+const n=Math.round((off-base-s)/gap);
+drawCar(x,y,Math.atan2(b[1]-a[1],b[0]-a[0]),CARPAL[((n%CARPAL.length)+CARPAL.length)%CARPAL.length],o.scale)}
+else{ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);
+ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=rad>3.6?1.8:1.4;ctx.stroke()}}}
 // Screen length of the active route up to each parking road's branch point.
 function screenLen(path){let t=0,p=path.map(screen);
 for(let i=1;i<p.length;i++)t+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return t}
@@ -244,7 +256,7 @@ if($('parking').checked&&!templeMode){let rel=origin==='tut'?RELEASE[release].id
 for(let a of templeArea){ctx.beginPath();a.coords[0].forEach((p,i)=>{let q=screen(p);i?ctx.lineTo(...q):ctx.moveTo(...q)});ctx.closePath();ctx.strokeStyle='#880e4f';ctx.lineWidth=1.5;ctx.stroke()}
 if(!templeMode)for(let l of templeLines)stroke(l.coords[0],l.name.startsWith('Devotees')?'#9fa8da':'#ffd600',4);
 if(!templeMode)for(let[k,c]of Object.entries(routes))stroke(c,CCOL[k]+'80',3,[7,6]);
-if($('compare').checked&&bases[origin])stroke(bases[origin],'#92a1ad',5);for(const r of allRoutes)stroke(r.c,'#fff',10);for(const r of allRoutes)stroke(r.c,r.col,6);for(const r of allRoutes)dotsAlong(r.c,r.col,0);stroke(active,'#fff',10);stroke(active,'#1574cc',6);if($('parking').checked&&!templeMode){for(const l of PARKLINES)stroke(l,'#fff',6.5);for(const l of PARKLINES)stroke(l,'#1574cc',3.5)}for(let d of divSegs){stroke(d.c,'#fff',11);stroke(d.c,d.col,7)}blockedStroke(blocked);dotsAlong(active,'#0d466f',0);if($('parking').checked&&!templeMode){const al=screenLen(active);PARKLINES.forEach((l,k)=>dotsAlong(l,'#0d466f',(parkFrac[k]||0)*al*IN_SLOW,30,3,flowOffsetIn))}hits=[];let boxes=[];
+if($('compare').checked&&bases[origin])stroke(bases[origin],'#92a1ad',5);for(const r of allRoutes)stroke(r.c,'#fff',10);for(const r of allRoutes)stroke(r.c,r.col,6);for(const r of allRoutes)dotsAlong(r.c,r.col,0,{car:true});stroke(active,'#fff',10);stroke(active,'#1574cc',6);if($('parking').checked&&!templeMode){for(const l of PARKLINES)stroke(l,'#fff',6.5);for(const l of PARKLINES)stroke(l,'#1574cc',3.5)}for(let d of divSegs){stroke(d.c,'#fff',11);stroke(d.c,d.col,7)}blockedStroke(blocked);dotsAlong(active,'#0d466f',0,{car:true});if($('parking').checked&&!templeMode){const al=screenLen(active);PARKLINES.forEach((l,k)=>dotsAlong(l,'#0d466f',(parkFrac[k]||0)*al*IN_SLOW,{gap:30,rad:3,off:flowOffsetIn,car:true,scale:.68}))}hits=[];let boxes=[];
 if(templeMode){for(let f of flowShow)stroke(f.path,'#ffffffe6',11);for(let f of flowShow)stroke(f.path,fcol(f),5,fdash(f));for(let f of flowShow)chevrons(f.path,fcol(f));for(let f of flowShow)dotsAlong(f.path,fcol(f),0);pressureMarks()}
 startPins(boxes);if(showImp)impPoints(boxes);
 for(let [n,p] of pointList){let park=n.startsWith('P_');if(park&&(!$('parking').checked||templeMode))continue;if(templeMode&&/TIN-TUT/.test(n))continue;if(showImp&&IMP_NAMES.has(n))continue;if(START_NAMES.has(n))continue;let q=screen(p);if(q[0]<0||q[0]>width||q[1]<0||q[1]>height)continue;let important=active.some(a=>Math.hypot(a[0]-p[0],a[1]-p[1])<.00025);if(!park&&!important&&zoom<14)continue;ctx.beginPath();ctx.arc(q[0],q[1],park?5:3.5,0,Math.PI*2);ctx.fillStyle=park?'#657b32':'#17334b';ctx.fill();hits.push({n,p,q});if(!$('labels').checked)continue;let rl=RELEASE[release],hl=park&&rl.ids.includes(pid(n));if(park&&zoom<14&&!hl)continue;let label=park?pid(n):n;ctx.font='600 12px system-ui';let w=ctx.measureText(label).width+8;let box=[q[0]+7,q[1]-20,w,18];if(boxes.some(b=>box[0]<b[0]+b[2]&&box[0]+w>b[0]&&box[1]<b[1]+b[3]&&box[1]+18>b[1]))continue;boxes.push(box);let lc=park?PKCOL[pid(n)==='P_22'?'tw':n.includes('(2)')?'tut':'opp']:(labelCol[n]||'#17334b');ctx.beginPath();ctx.roundRect(box[0],box[1],box[2],box[3],4);ctx.fillStyle=lc;ctx.fill();ctx.strokeStyle='#ffffffcc';ctx.lineWidth=1.2;ctx.stroke();ctx.fillStyle='#fff';ctx.fillText(label,box[0]+4,box[1]+13)}
