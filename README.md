@@ -16,3 +16,14 @@ Interactive briefing map for the Thoothukudi (TUT) and Tirunelveli (TIN) vehicle
 - `Vehicle-Entry_Route-Ramakrishna School Route.kmz` – Ramakrishna School Jn. approach and its feeders
 - `Kulasai_Dussehra_Route_Contingency_Map.html` – earlier Claude version (reference only)
 - `TIN_TUT_Route_Roadmap.html` – earlier roadmap version
+
+## Briefing clips
+
+`clips/` holds one short MP4 per approach and traffic condition, with the
+scenario name burned into the frame, for sharing with sector officers.
+`clips/index.html` lists them all for download.
+
+To re-record after the map changes:
+
+    python tools/record_clips.py        # then open http://localhost:8731/_recorder
+    python tools/convert_clips.py       # webm -> mp4

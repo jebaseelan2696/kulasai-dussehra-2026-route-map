@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "clip-recorder",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["tools/record_clips.py"],
+      "port": 8731,
+      "url": "http://localhost:8731"
+    }
+  ]
+}
