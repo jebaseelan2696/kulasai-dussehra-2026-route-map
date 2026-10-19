@@ -23,7 +23,7 @@ canvas{display:none}</style></head><body>
 <div id="bar">starting…</div><div id="log"></div>
 <iframe id="f" src="index.html"></iframe><canvas id="out"></canvas>
 <script>
-const SETTLE=2600, DURATION=9000, FPS=25, HEAD=66;
+const SETTLE=2600, DURATION=17000, FPS=25, HEAD=66;
 function keepAwake(){try{const a=new (window.AudioContext||window.webkitAudioContext)();
 const o=a.createOscillator(),g=a.createGain();g.gain.value=0.0001;
 o.connect(g);g.connect(a.destination);o.start();return a}catch(e){return null}}
@@ -40,17 +40,34 @@ function compose(src,out,title,sub){
   ctx.drawImage(src,0,0,src.width,src.height,0,HEAD,out.width,out.height-HEAD);
 }
 
-async function record(src,out,title,sub,name){
-  const stream=out.captureStream(FPS);
+// A worker timer keeps running when the page is backgrounded, unlike
+// requestAnimationFrame, which silently stalls and records nothing.
+function ticker(fn,ms){
+  const w=new Worker(URL.createObjectURL(new Blob(
+    ['setInterval(()=>postMessage(0),'+ms+')'],{type:'text/javascript'})));
+  w.onmessage=fn;return w;
+}
+async function record(src,out,title,sub,name,step){
+  const stream=out.captureStream(0);
+  const track=stream.getVideoTracks()[0];
   const mt=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']
             .find(t=>MediaRecorder.isTypeSupported(t));
-  const rec=new MediaRecorder(stream,{mimeType:mt,videoBitsPerSecond:2200000});
+  const rec=new MediaRecorder(stream,{mimeType:mt,videoBitsPerSecond:2600000});
   const parts=[];rec.ondataavailable=e=>e.data.size&&parts.push(e.data);
-  let raf;const tick=()=>{compose(src,out,title,sub);raf=requestAnimationFrame(tick)};
-  tick();rec.start();
-  await sleep(DURATION);
+  // Count frames rather than watch the clock: if the page is throttled the
+  // recording simply takes longer in real time instead of coming out short.
+  const total=Math.round(DURATION/1000*FPS), deadline=Date.now()+DURATION*4;
+  let n=0, w=null;
+  rec.start();
+  await new Promise(res=>{
+    w=ticker(()=>{
+      if(n>=total||Date.now()>deadline){res();return}
+      n++;step();compose(src,out,title,sub);track.requestFrame();
+    },1000/FPS);
+  });
+  w.terminate();
   await new Promise(r=>{rec.onstop=r;rec.stop()});
-  cancelAnimationFrame(raf);
+  if(n<total)say('      only '+n+' of '+total+' frames');
   const blob=new Blob(parts,{type:'video/webm'});
   await fetch('/save?name='+encodeURIComponent(name),{method:'POST',body:blob});
   return blob.size;
@@ -64,6 +81,12 @@ async function record(src,out,title,sub,name){
   await sleep(1800);
   const w=f.contentWindow, doc=f.contentDocument;
   const origin=doc.getElementById('origin'), scen=doc.getElementById('scenario');
+  // the map keeps its animation state in lexical bindings, not on window,
+  // so define the stepping helpers inside its own scope
+  w.eval("window.__hold=function(){playing=false};"+
+    "window.__step=function(a){flowOffset+=a;flowOffsetIn+=a*IN_SLOW;dirty=true;"+
+    "if(blocked.length<2)draw(performance.now())};"+
+    "window.__adv=function(ms){return ms*DOT_SPEED*Number(document.getElementById('speed').value)}");
   const src=doc.querySelector('canvas'), out=document.getElementById('out');
   const jobs=[];
   for(const o of [...origin.options]){
@@ -84,7 +107,9 @@ async function record(src,out,title,sub,name){
     out.height=src.height/(w.devicePixelRatio||1)+HEAD;
     const name=String(n).padStart(2,'0')+'-'+slug(otext)+'--'+slug(stext)+'.webm';
     say('['+n+'/'+jobs.length+'] '+name);
-    const size=await record(src,out,otext.replace(/^\d+\s*·\s*/,''),stext,name);
+    w.__hold();
+    const adv=w.__adv(1000/FPS);
+    const size=await record(src,out,otext.replace(/^\d+\s*·\s*/,''),stext,name,()=>w.__step(adv));
     say('      saved '+(size/1024|0)+' KB'+(size<4000?'   <-- EMPTY, page was throttled':''));
     await sleep(400);
   }

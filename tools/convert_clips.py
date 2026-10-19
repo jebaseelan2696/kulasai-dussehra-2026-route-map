@@ -20,9 +20,12 @@ def main():
         src = os.path.join(SRC, n)
         dst = os.path.join(SRC, n[:-5] + '.mp4')
         cmd = [FF, '-y', '-loglevel', 'error', '-i', src,
-               '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.1',
-               '-pix_fmt', 'yuv420p', '-crf', '26', '-preset', 'medium',
+               '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.0',
+               '-pix_fmt', 'yuv420p', '-crf', '24', '-preset', 'slow',
                '-movflags', '+faststart', '-an',
+               # the browser writes frames at whatever moment they were pushed;
+               # resample to a constant rate so playback is even
+               '-fps_mode', 'cfr', '-r', '25',
                # even dimensions are required by yuv420p
                '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
                dst]
